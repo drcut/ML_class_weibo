@@ -31,7 +31,7 @@ EOS_ID = 2
 UNK_ID = 3
 _START_VOCAB = [_PAD, _GO, _EOS, _UNK]
 #buckets = [10, 20, 30, 50,70,90,120,150,170]
-buckets=[70]
+buckets=[150]
 steps_per_checkpoint = 100
 learning_rate = 0.05
 learning_rate_decay_factor = 0.99
@@ -119,7 +119,6 @@ for i in xrange(len(train_bucket_sizes))]
                           batch_size,
                           learning_rate,
                           learning_rate_decay_factor,
-                          use_lstm = True,
                           forward_only=False)    # is_train = True
     # sess.run(tf.initialize_all_variables())
         layer.initialize_global_variables(sess)

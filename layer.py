@@ -160,8 +160,6 @@ class Cnn_Softmax_Wrapper(Layer):
                learning_rate,
                learning_rate_decay_factor,
                class_num=9,
-               use_lstm=False,
-               num_samples=512,
                forward_only=False,
                name='wrapper'):
     Layer.__init__(self)#, name=name)
@@ -175,7 +173,7 @@ class Cnn_Softmax_Wrapper(Layer):
 
     with tf.variable_scope(name) as vs:   
         # Feeds for inputs.
-        self.encoder_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,70],
+        self.encoder_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,150],
                                                     name="encoder")
         self.target_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,self.class_num],
                                                     name="target")
@@ -183,34 +181,34 @@ class Cnn_Softmax_Wrapper(Layer):
         # Our targets are decoder inputs shifted by one.
         self.targets = self.target_inputs
         # Training outputs and losses.
-        conv_stride=3
-        pool_stride=3
+        conv_stride = 2 #对axis1
+        pool_stride=5
         '''
         print("encoder")
         print(self.encoder_inputs)
         print("after reshape")
         print(tf.reshape(self.encoder_inputs,[batch_size,-1,1]))
         '''
-        state = tf.layers.conv1d(tf.reshape(self.encoder_inputs,[batch_size,-1,1]),  filters = 11, kernel_size=5, strides=conv_stride, padding='valid', data_format='channels_last', activation=tf.sigmoid, use_bias=True, trainable=True, name="conv1d") 
+        state = tf.layers.conv1d(tf.reshape(self.encoder_inputs,[batch_size,-1,1]),  filters = 20, kernel_size=2, strides=conv_stride, padding='valid', data_format='channels_last', activation=tf.sigmoid, use_bias=True, trainable=True, name="conv1d") 
         
-        after_pool = tf.reshape(tf.layers.max_pooling1d(state , pool_size=3, strides=pool_stride, padding='valid', 
+        after_pool = tf.reshape(tf.layers.max_pooling1d(state , pool_size=1, strides=pool_stride, padding='valid', 
           data_format='channels_last', name="pool"),[batch_size,-1])
         
-        full_connect1 = tf.contrib.layers.legacy_fully_connected(after_pool,1024, activation_fn=tf.sigmoid, name=None, trainable=True)
+        #full_connect1 = tf.contrib.layers.legacy_fully_connected(after_pool,1024, activation_fn=tf.nn.relu, name=None, trainable=True)
         #print(full_connect1)
-        full_connect2 = tf.contrib.layers.legacy_fully_connected(full_connect1,self.class_num, activation_fn=tf.nn.relu, name=None, trainable=True)
+        full_connect2 = tf.contrib.layers.legacy_fully_connected(after_pool,self.class_num, activation_fn=tf.nn.sigmoid, name=None, trainable=True)
         y_conv=tf.nn.softmax(full_connect2)
         #print("y_conv")
         #print(y_conv)
         #print("target inputs")
         #print(self.target_inputs)
-        self.losses = tf.losses.softmax_cross_entropy(tf.reshape(self.target_inputs,[batch_size,class_num]), y_conv)
+        self.losses = tf.losses.softmax_cross_entropy(tf.reshape(self.target_inputs,[self.batch_size,self.class_num]), y_conv)
         self.outputs = tf.argmax(y_conv,1)
         #print(self.outputs)
 
         params = tf.trainable_variables()
-        #self.opt=tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam').minimize(self.losses)
-        
+        self.opt=tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam').minimize(self.losses)
+        '''
         self.gradient_norms = []
         opt = tf.train.GradientDescentOptimizer(self.learning_rate)
         gradients = tf.gradients(self.losses, params)
@@ -218,7 +216,7 @@ class Cnn_Softmax_Wrapper(Layer):
         self.gradient_norms.append(norm)
         #self.updates.append(opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step))
         self.updates=opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
-        
+        '''
         self.all_params = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
         
   def step(self, session, encoder_inputs, target_inputs,
@@ -239,17 +237,15 @@ class Cnn_Softmax_Wrapper(Layer):
 
     # Output feed: depends on whether we do a backward step or not.
     if not forward_only:
-      output_feed = [self.updates,  # Update Op that does SGD.
-                     #self.gradient_norms[bucket_id],  # Gradient norm.
+      output_feed = [self.opt,  # Update Op that does SGD.
                      self.losses
                      ]  # Loss for this batch.
     else:
-      output_feed = [self.losses]  # Loss for this batch.
-      output_feed.append(self.outputs[bucket_id])
+      output_feed = [self.losses,self.outputs[bucket_id]]  # Loss for this batch.
     #session.run(self.opt)
     outputs = session.run(output_feed, input_feed)
     if not forward_only:
-      return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.
+      return None,outputs[1], None  # Gradient norm, loss, no outputs.
     else:
       return None, outputs[0], outputs[1]  # No gradient norm, loss, outputs.
 
