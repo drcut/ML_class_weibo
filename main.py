@@ -19,6 +19,7 @@ vocab_size = 57600          #vocabulary size
 _WORD_SPLIT=re.compile(b" ([.,!?\"':;)(])")
 _DIGIT_RE = re.compile(br"\d")  # regular expression for search digits
 normalize_digits = True         # replace all digits to 0
+model_file_name = "cnn"
 # Special vocabulary symbols
 _PAD = b"_PAD"                  # Padding
 _GO = b"_GO"                    # start to generate the output sentence
@@ -30,12 +31,12 @@ EOS_ID = 2
 UNK_ID = 3
 _START_VOCAB = [_PAD, _GO, _EOS, _UNK]
 #buckets = [10, 20, 30, 50,70,90,120,150,170]
-buckets=[50]
-steps_per_checkpoint = 10
-learning_rate = 0.5
+buckets=[70]
+steps_per_checkpoint = 100
+learning_rate = 0.05
 learning_rate_decay_factor = 0.99
 max_gradient_norm = 2.0             # Truncated backpropagation
-batch_size = 2
+batch_size = 128
 def read_data(source_path, target_path, buckets,max_size=None):
   """Read data from source and target files and put into buckets.
   """
@@ -150,7 +151,7 @@ for i in xrange(len(train_bucket_sizes))]
             # Decrease learning rate if no improvement was seen over last 3 times.
                 if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
                     sess.run(model.learning_rate_decay_op)
-                    previous_losses.append(loss)
+                previous_losses.append(loss)
             # Save model
                 tl.files.save_npz(model.all_params, name=model_file_name+'.npz')
                 step_time, loss = 0.0, 0.0

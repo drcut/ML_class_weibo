@@ -175,9 +175,7 @@ class Cnn_Softmax_Wrapper(Layer):
 
     with tf.variable_scope(name) as vs:   
         # Feeds for inputs.
-        #self.encoder_inputs = []
-        #self.target_inputs = []
-        self.encoder_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,50],
+        self.encoder_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,70],
                                                     name="encoder")
         self.target_inputs=tf.placeholder(tf.float32, shape=[self.batch_size,self.class_num],
                                                     name="target")
@@ -187,20 +185,18 @@ class Cnn_Softmax_Wrapper(Layer):
         # Training outputs and losses.
         conv_stride=3
         pool_stride=3
-        #print("encoder")
-        #print(self.encoder_inputs)
-        #print("after reshape")
-        #print(tf.reshape(self.encoder_inputs,[batch_size,1,-1]))
-        state = tf.layers.conv1d(tf.reshape(self.encoder_inputs,[batch_size,1,-1]),  filters = 11, kernel_size=5, strides=conv_stride, padding='valid', data_format='channels_first', activation=tf.sigmoid, use_bias=True, trainable=True, name="conv1d") 
-        #print("state")
-       # print(state)
         '''
+        print("encoder")
+        print(self.encoder_inputs)
+        print("after reshape")
+        print(tf.reshape(self.encoder_inputs,[batch_size,-1,1]))
+        '''
+        state = tf.layers.conv1d(tf.reshape(self.encoder_inputs,[batch_size,-1,1]),  filters = 11, kernel_size=5, strides=conv_stride, padding='valid', data_format='channels_last', activation=tf.sigmoid, use_bias=True, trainable=True, name="conv1d") 
+        
         after_pool = tf.reshape(tf.layers.max_pooling1d(state , pool_size=3, strides=pool_stride, padding='valid', 
-          data_format='channels_first', name="pool"),[batch_size,-1])
-        print("pool finish")
-        print(after_pool)
-        '''
-        full_connect1 = tf.contrib.layers.legacy_fully_connected(tf.reshape(state,[batch_size,-1]),1024, activation_fn=tf.sigmoid, name=None, trainable=True)
+          data_format='channels_last', name="pool"),[batch_size,-1])
+        
+        full_connect1 = tf.contrib.layers.legacy_fully_connected(after_pool,1024, activation_fn=tf.sigmoid, name=None, trainable=True)
         #print(full_connect1)
         full_connect2 = tf.contrib.layers.legacy_fully_connected(full_connect1,self.class_num, activation_fn=tf.nn.relu, name=None, trainable=True)
         y_conv=tf.nn.softmax(full_connect2)
@@ -213,13 +209,17 @@ class Cnn_Softmax_Wrapper(Layer):
         #print(self.outputs)
 
         params = tf.trainable_variables()
+        #self.opt=tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam').minimize(self.losses)
+        
         self.gradient_norms = []
-        self.updates = []
         opt = tf.train.GradientDescentOptimizer(self.learning_rate)
         gradients = tf.gradients(self.losses, params)
         clipped_gradients, norm = tf.clip_by_global_norm(gradients,max_gradient_norm)
         self.gradient_norms.append(norm)
-        self.updates.append(opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step))
+        #self.updates.append(opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step))
+        self.updates=opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
+        
+        self.all_params = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
         
   def step(self, session, encoder_inputs, target_inputs,
            bucket_id, forward_only):
@@ -239,14 +239,14 @@ class Cnn_Softmax_Wrapper(Layer):
 
     # Output feed: depends on whether we do a backward step or not.
     if not forward_only:
-      output_feed = [self.updates[bucket_id],  # Update Op that does SGD.
-                     self.gradient_norms[bucket_id],  # Gradient norm.
+      output_feed = [self.updates,  # Update Op that does SGD.
+                     #self.gradient_norms[bucket_id],  # Gradient norm.
                      self.losses
                      ]  # Loss for this batch.
     else:
       output_feed = [self.losses]  # Loss for this batch.
       output_feed.append(self.outputs[bucket_id])
-
+    #session.run(self.opt)
     outputs = session.run(output_feed, input_feed)
     if not forward_only:
       return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.
